@@ -23,11 +23,23 @@ contract Kindlink {
     mapping(address => mapping(address => bool)) isVoted;
     mapping(address => uint) totalUsersDonations;
 
+    event Donate(
+        address indexed sender,
+        address indexed foundation,
+        uint value
+    );
+    event Vote(address indexed sender, address indexed foundation, bool vote);
+    event WinsVote(address indexed foundation);
+
     constructor() {
         owner = msg.sender;
     }
 
     function donate(address foundationAddress) external payable {
+        require(
+            foundationAddress != address(0),
+            "Not allowing users to send ether to 0 address"
+        );
         Foundation storage foundation = foundations[foundationAddress];
         require(
             foundation.contractAddress == foundationAddress,
@@ -36,6 +48,8 @@ contract Kindlink {
         (bool sent, ) = foundationAddress.call{value: msg.value}("");
         require(sent, "Donation Failed");
         totalUsersDonations[msg.sender] += msg.value;
+
+        emit Donate(msg.sender, foundationAddress, msg.value);
     }
 
     function vote(bool inputVote, address foundationAddress) external {
@@ -64,6 +78,8 @@ contract Kindlink {
 
         // ini bagian yang udah vote diitung
         isVoted[foundationAddress][msg.sender] = true;
+
+        emit Vote(msg.sender, foundationAddress, inputVote);
     }
 
     function addCandidates(
