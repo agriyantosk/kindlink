@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 // Uncomment this line to use console.log
 // import "hardhat/console.sol";
+import "./Foundation.sol";
 
 contract Kindlink {
     struct FoundationCandidate {
@@ -12,14 +13,14 @@ contract Kindlink {
         uint noVotes;
     }
 
-    struct Foundation {
+    struct ListedFoundation {
         address contractAddress;
         string name;
     }
 
     address public owner;
     mapping(address => FoundationCandidate) candidates;
-    mapping(address => Foundation) foundations;
+    mapping(address => ListedFoundation) foundations;
     mapping(address => mapping(address => bool)) isVoted;
     mapping(address => uint) totalUsersDonations;
 
@@ -30,6 +31,7 @@ contract Kindlink {
     );
     event Vote(address indexed sender, address indexed foundation, bool vote);
     event WinsVote(address indexed foundation);
+    event LoseVote(address indexed foundation);
 
     constructor() {
         owner = msg.sender;
@@ -40,7 +42,7 @@ contract Kindlink {
             foundationAddress != address(0),
             "Not allowing users to send ether to 0 address"
         );
-        Foundation storage foundation = foundations[foundationAddress];
+        ListedFoundation storage foundation = foundations[foundationAddress];
         require(
             foundation.contractAddress == foundationAddress,
             "Foundation is not registered"
@@ -65,10 +67,6 @@ contract Kindlink {
 
         // ini bagian dia ngevote aja
         FoundationCandidate storage candidate = candidates[foundationAddress];
-        require(
-            candidate.contractAddress == foundationAddress,
-            "Foundation Candidate not found"
-        );
 
         if (inputVote) {
             candidate.yesVotes++;
@@ -94,8 +92,55 @@ contract Kindlink {
         );
     }
 
+    function countVote(address foundationAddress) private view returns (bool) {
+        FoundationCandidate storage candidate = candidates[foundationAddress];
+        uint yesCount = candidate.yesVotes /
+            (candidate.yesVotes + candidate.noVotes);
+        uint noCount = candidate.noVotes /
+            (candidate.yesVotes + candidate.noVotes);
+
+        if (yesCount > noCount) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    function approveCandidate(
+        address foundationAddress,
+        string memory name,
+        address coAddress
+    ) external checkFoundationCandidate(foundationAddress) {
+        if (countVote(foundationAddress)) {
+            Foundation newFoundation = new Foundation(
+                owner,
+                foundationAddress,
+                coAddress
+            );
+            foundations[address(newFoundation)] = ListedFoundation(
+                address(newFoundation),
+                name
+            );
+            delete candidates[foundationAddress];
+
+            emit WinsVote(address(newFoundation));
+        } else {
+            delete candidates[foundationAddress];
+            emit LoseVote(foundationAddress);
+        }
+    }
+
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner can do this action");
+        _;
+    }
+
+    modifier checkFoundationCandidate(address foundationAddress) {
+        FoundationCandidate storage candidate = candidates[foundationAddress];
+        require(
+            candidate.contractAddress == foundationAddress,
+            "Foundation Candidate not found"
+        );
         _;
     }
 }
